@@ -102,3 +102,5 @@ if not claim_id:
     claim_id = '0'
 else:
     main()
+
+input('\n ' + n + ' Press Enter to Exit...')
