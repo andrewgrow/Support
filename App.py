@@ -9,9 +9,9 @@ import shutil
 from os import walk
 
 n = '======================\n'
-dir_path = os.path.dirname(os.path.realpath(__file__))
-input_path = dir_path + '\input'
-output_path = dir_path + '\output'
+real_path = os.path.dirname(os.path.realpath(__file__))
+input_path = real_path + '\input'
+output_path = real_path + '\output'
 
 
 def main():
