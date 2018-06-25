@@ -28,8 +28,8 @@ def main() -> None:
             file_extension = os.path.splitext(file)[1]
             if file_extension == '.db':
                 android_flow(file)
-            elif file_extension == '.sql':
-                pass
+            elif file_extension == '.sqlite':
+                ios_flow(file)
             else:
                 pass
     else:
@@ -81,16 +81,12 @@ def android_flow(db: str) -> None:
     tuple_files = cursor.fetchall()
 
     if tuple_files:
+        result = [item for array in tuple_files for item in array]
 
-        list_names = []
-        for t in tuple_files:
-            for v in t:
-                list_names.append(v)
-
-        if list_names:
-            print('', n, 'For claim_id', claim_id, 'we found', len(list_names), 'file(s)')
+        if result:
+            print('', n, 'For claim_id', claim_id, 'we found', len(result), 'file(s)')
             clear_output_directory()
-            for name in list_names:
+            for name in result:
                 flow_file = name.split('/')[-1]
                 print(flow_file)
                 copy_file(flow_file)
@@ -99,6 +95,28 @@ def android_flow(db: str) -> None:
 
     cursor.close()
     db_connection.close()
+
+
+def get_ios_files_by_cursor(arg_cursor, arg_sql, arg):
+    result = set()
+
+    argument = (arg,)
+    if isinstance(arg, list):
+        argument = arg
+
+    arg_cursor.execute(arg_sql, argument)
+    tuple_files = arg_cursor.fetchall()
+    if tuple_files:
+        items = [item for array in tuple_files for item in array]
+        if items:
+            for item in items:
+                if not item == 'None':
+                    result.add(item)
+    return result
+
+
+def check_if_exist(filtered_list):
+    return [item for item in filtered_list if os.path.exists(input_path + "\\" + item)]
 
 
 def ios_flow(sql: str) -> None:
@@ -115,16 +133,84 @@ def ios_flow(sql: str) -> None:
     Смотрим, чтобы имена не совпадали с именами из пункта 4.
     7. Повторяем пункты 4,5,6 для таблицы videos.
     """
+    all_files = set()
+
     db_path = input_path + "\\" + sql
-    # print(db_path)
     db_connection = sqlite3.connect(db_path)
     cursor = db_connection.cursor()
-    sql = "SELECT file_path FROM upload_files WHERE claim_id = ?"
+    sql = "SELECT local_id FROM tickets WHERE id = ?"
     cursor.execute(sql, (claim_id,))
+
+    # In the start case we will open the Tickets table and will find id
+    tuple_files = cursor.fetchall()
+    if not tuple_files or not tuple_files[0] or not tuple_files[0][0]:
+        print('', n, 'For claim_id', claim_id, 'we found', 0, 'file(s)')
+        return
+    local_ticket_id = tuple_files[0][0]
+    print('We going to search files for claim_id =', claim_id, ', where local_ticket_id =', local_ticket_id)
+
+    # get attachments where we are have local_ticket_id
+    sql = "SELECT local_file_name FROM attachments WHERE local_ticket_id = ?"
+    files = get_ios_files_by_cursor(cursor, sql, local_ticket_id)
+    if files:
+        for file in files:
+            all_files.add(file)
+
+    # get photos where we are have local_ticket_id
+    sql = "SELECT local_file_name FROM photos WHERE local_ticket_id = ?"
+    files = get_ios_files_by_cursor(cursor, sql, local_ticket_id)
+    if files:
+        for file in files:
+            all_files.add(file)
+
+    # get videos where we are have local_ticket_id
+    sql = "SELECT local_file_name FROM videos WHERE local_ticket_id = ?"
+    files = get_ios_files_by_cursor(cursor, sql, local_ticket_id)
+    if files:
+        for file in files:
+            all_files.add(file)
+
+    # check demonstrations for photos and videos
+    sql = "SELECT local_id FROM demonstrations WHERE local_ticket_id = ?"
+    cursor.execute(sql, (local_ticket_id,))
+    tuple_files = cursor.fetchall()
+    if tuple_files:
+        items = [item for array in tuple_files for item in array]
+        if items:
+            placeholder = '?'
+            placeholders = ', '.join(placeholder for _ in items)
+            sql = "SELECT local_file_name FROM photos WHERE local_demonstration_id IN (%s)" % placeholders
+            files = get_ios_files_by_cursor(cursor, sql, items)
+            if files:
+                for file in files:
+                    all_files.add(file)
+            sql = "SELECT local_file_name FROM videos WHERE local_demonstration_id IN (%s)" % placeholders
+            files = get_ios_files_by_cursor(cursor, sql, items)
+            if files:
+                for file in files:
+                    all_files.add(file)
+
+    cursor.close()
+    db_connection.close()
+
+    # remove None
+    filtered_list = list(filter(None, all_files))
+    # copy files, if exist
+    if filtered_list:
+        clear_output_directory()
+
+        exists = check_if_exist(filtered_list)
+        if exists:
+            print('', n, 'For claim_id', claim_id, 'we found', len(exists), 'file(s)')
+            for name in exists:
+                print(str(name))
+                copy_file(str(name))
+        else:
+            print('', n, 'For claim_id', claim_id, 'we found 0 files that exist here')
 
 
 # User input and start work here:
-claim_id = input('Please, input claim_id. For example "70820" of "69051" and press enter \n')
+claim_id = input('Please, input claim_id. For example "70820"/"69051" or "29607"/"33721" and press enter \n')
 if not claim_id:
     print('', n, 'You need to print a right claim_id. Default value is 0\n', n)
     claim_id = '0'
