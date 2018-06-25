@@ -14,7 +14,9 @@ input_path = real_path + '\input'
 output_path = real_path + '\output'
 
 
-def main():
+def main() -> None:
+    make_dirs()
+
     files_list = []
     for (dir_path, dir_name, file_name) in walk(input_path):
         files_list.extend(file_name)
@@ -34,7 +36,7 @@ def main():
         print('', n, "Current directory with files is empty or not exist. Please, check the 'input' directory.")
 
 
-def clear_output_directory():
+def make_dirs() -> None:
     # be sure it exist (input_path)
     if not os.path.exists(input_path):
         os.makedirs(input_path)
@@ -42,6 +44,10 @@ def clear_output_directory():
     # be sure it exist (output_path)
     if not os.path.exists(output_path):
         os.makedirs(output_path)
+
+
+def clear_output_directory() -> None:
+    make_dirs()
 
     # clear
     for the_file in os.listdir(output_path):
@@ -55,7 +61,7 @@ def clear_output_directory():
             print(e)
 
 
-def copy_file(file: str):
+def copy_file(file: str) -> None:
     current_file = input_path + '\\' + file
     new_file = output_path + '\\' + file
     try:
@@ -64,7 +70,7 @@ def copy_file(file: str):
         print(e)
 
 
-def android_flow(db: str):
+def android_flow(db: str) -> None:
     db_path = input_path + "\\" + db
     # print(db_path)
     db_connection = sqlite3.connect(db_path)
@@ -93,6 +99,28 @@ def android_flow(db: str):
 
     cursor.close()
     db_connection.close()
+
+
+def ios_flow(sql: str) -> None:
+    """
+    Поиск данных в иос:
+    1. Например, мы ищем данные для таски 29607 - photo, video, attachments.
+    2. Сначала открываем таблицу tickets и в поле id ищем 29607. В ответе смотрим поле local_id = 33
+    3. Идём в attachments и выбираем все файлы по local_ticket_id с 33
+    4. Затем идём в photos и выбираем все файлы по local_ticket_id с 33.
+    5. Так как у контента может не быть local_ticket_id, но есть демонстрация, нужно сделать сверку по демонстрации.
+    Идём в таблицу demonstrations в поле local_ticket_id ищем 33, получаем список демонстраций для этого тикета.
+    В нашем случае это 1,2,3,4.
+    6. Возвращаемся в таблицу photos и выгребаем все данные для local_demonstration_id по очереди 1,2,3,4.
+    Смотрим, чтобы имена не совпадали с именами из пункта 4.
+    7. Повторяем пункты 4,5,6 для таблицы videos.
+    """
+    db_path = input_path + "\\" + sql
+    # print(db_path)
+    db_connection = sqlite3.connect(db_path)
+    cursor = db_connection.cursor()
+    sql = "SELECT file_path FROM upload_files WHERE claim_id = ?"
+    cursor.execute(sql, (claim_id,))
 
 
 # User input and start work here:
