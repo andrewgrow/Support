@@ -3,18 +3,19 @@ import sqlite3
 import shutil
 
 # for start open terminal and print
-# py -3 App.py
-
+# win: py -3 App.py
+# macOs: python3 App.py
 
 from os import walk
 
 n = '======================\n'
 real_path = os.path.dirname(os.path.realpath(__file__))
-input_path = real_path + '\input'
-output_path = real_path + '\output'
+separator = "\\"
+input_path = real_path + separator + 'input'
+output_path = real_path + separator + 'output'
 
 
-def main() -> None:
+def main(autosearch: bool) -> None:
     make_dirs()
 
     files_list = []
@@ -27,9 +28,15 @@ def main() -> None:
             # Split a path in root and extension.
             file_extension = os.path.splitext(file)[1]
             if file_extension == '.db':
-                android_flow(file)
+                if autosearch:
+                    android_flow(file, True)
+                else:
+                    android_flow(file, False)
             elif file_extension == '.sqlite':
-                ios_flow(file)
+                if autosearch:
+                    pass
+                else:
+                    ios_flow(file)
             else:
                 pass
     else:
@@ -37,6 +44,14 @@ def main() -> None:
 
 
 def make_dirs() -> None:
+
+    # check path separator: macOS it's '/', and win it's '\\'
+    if '\\' not in real_path and '/' in real_path:
+        global separator, input_path, output_path
+        separator = '/'
+        input_path = real_path + separator + 'input'
+        output_path = real_path + separator + 'output'
+
     # be sure it exist (input_path)
     if not os.path.exists(input_path):
         os.makedirs(input_path)
@@ -61,39 +76,58 @@ def clear_output_directory() -> None:
             print(e)
 
 
-def copy_file(file: str) -> None:
-    current_file = input_path + '\\' + file
-    new_file = output_path + '\\' + file
+def copy_file(arg_file: str, arg_claim_id: str) -> None:
+    current_file = input_path + separator + arg_file
+    new_file = output_path + separator + arg_file
+    if arg_claim_id:
+        claim_path = output_path + separator + arg_claim_id
+        if not os.path.exists(claim_path):
+            os.makedirs(claim_path)
+        new_file = claim_path + separator + arg_file
     try:
         shutil.copyfile(current_file, new_file)
     except Exception as e:
         print(e)
 
 
-def android_flow(db: str) -> None:
-    db_path = input_path + "\\" + db
+def android_flow(db: str, autosearch) -> None:
+    db_path = input_path + separator + db
     # print(db_path)
     db_connection = sqlite3.connect(db_path)
     cursor = db_connection.cursor()
-    sql = "SELECT file_path FROM upload_files WHERE claim_id = ?"
-    cursor.execute(sql, (claim_id,))
+
     # print(cursor.fetchall())
-    tuple_files = cursor.fetchall()
 
-    if tuple_files:
-        result = [item for array in tuple_files for item in array]
-
-        if result:
-            print('', n, 'For claim_id', claim_id, 'we found', len(result), 'file(s)')
-            clear_output_directory()
-            for name in result:
-                flow_file = name.split('/')[-1]
-                print(flow_file)
-                copy_file(flow_file)
+    if autosearch:
+        sql = "SELECT claim_id, file_path FROM upload_files"
+        cursor.execute(sql)
+        tuple_items = cursor.fetchall()
+        if tuple_items:
+            for array in tuple_items:
+                # print(array[0], array[1])
+                array_claim_id = str(array[0])
+                array_file_path = array[1].split('/')[-1]
+                copy_file(array_file_path, array_claim_id)
+        cursor.close()
     else:
-        print('', n, 'Files with claim_id', claim_id, 'not found')
+        sql = "SELECT file_path FROM upload_files WHERE claim_id = ?"
+        cursor.execute(sql, (claim_id,))
+        tuple_files = cursor.fetchall()
 
-    cursor.close()
+        if tuple_files:
+            result = [item for array in tuple_files for item in array]
+
+            if result:
+                print('', n, 'For claim_id', claim_id, 'we found', len(result), 'file(s)')
+                clear_output_directory()
+                for name in result:
+                    flow_file = name.split('/')[-1]
+                    print(flow_file)
+                    copy_file(flow_file)
+        else:
+            print('', n, 'Files with claim_id', claim_id, 'not found')
+        cursor.close()
+
     db_connection.close()
 
 
@@ -116,7 +150,7 @@ def get_ios_files_by_cursor(arg_cursor, arg_sql, arg):
 
 
 def check_if_exist(filtered_list):
-    return [item for item in filtered_list if os.path.exists(input_path + "\\" + item)]
+    return [item for item in filtered_list if os.path.exists(input_path + separator + item)]
 
 
 def ios_flow(sql: str) -> None:
@@ -135,7 +169,7 @@ def ios_flow(sql: str) -> None:
     """
     all_files = set()
 
-    db_path = input_path + "\\" + sql
+    db_path = input_path + separator + sql
     db_connection = sqlite3.connect(db_path)
     cursor = db_connection.cursor()
     sql = "SELECT local_id FROM tickets WHERE id = ?"
@@ -210,11 +244,12 @@ def ios_flow(sql: str) -> None:
 
 
 # User input and start work here:
-claim_id = input('Please, input claim_id. For example "70820"/"69051" or "29607"/"33721" and press enter \n')
+claim_id = input('Please, press ENTER for AUTOSEARCH or input claim_id (for example 34652).\n')
+
 if not claim_id:
-    print('', n, 'You need to print a right claim_id. Default value is 0\n', n)
     claim_id = '0'
+    main(True)
 else:
-    main()
+    main(False)
 
 input('\n ' + n + ' Press Enter to Exit...')
