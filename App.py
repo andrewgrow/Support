@@ -99,14 +99,29 @@ def android_flow(db: str, autosearch) -> None:
     # print(cursor.fetchall())
 
     if autosearch:
+        # AUTOSEARCH: all files will be copied to a folder with a claim ID number
         sql = "SELECT claim_id, file_path FROM upload_files"
         cursor.execute(sql)
         tuple_items = cursor.fetchall()
         if tuple_items:
             for array in tuple_items:
-                # print(array[0], array[1])
                 array_claim_id = str(array[0])
                 array_file_path = array[1].split('/')[-1]
+                # if the file doesn't have the claim_id we need to found it through a claim
+                if array[0] == 0:
+                    # find the claim by file's address
+                    sql = 'SELECT claims FROM upload_files WHERE file_path LIKE "%' + array_file_path + '"'
+                    cursor.execute(sql)
+                    tuple_claims = cursor.fetchall()
+                    if tuple_claims and tuple_claims[0] and tuple_claims[0][0]:
+                        local_claim_id = str(tuple_claims[0][0])
+                        # find the remote ticket_id by the local_id
+                        sql = 'SELECT ticketId FROM claims WHERE _id = ' + local_claim_id
+                        cursor.execute(sql)
+                        tuple_ticket_id = cursor.fetchall()
+                        if tuple_ticket_id:
+                            array_claim_id = str(tuple_ticket_id[0][0]) + ' (but files not have claim_id)'
+
                 copy_file(array_file_path, array_claim_id)
         cursor.close()
     else:
